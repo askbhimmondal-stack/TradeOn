@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Work Order Control Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+:root {
+  --sidebar-bg: #227c53;
+  --sidebar-active: #f1f5f3;
+  --sidebar-text: #ffffff;
+  --bg: #eef2f0;
+  --card-bg: #ffffff;
+  --text: #2d3748;
+  --muted: #718096;
+  --primary: #227c53;
+  --red: #e53e3e;
+  --red-bg: #fff5f5;
+  --amber: #dd6b20;
+  --amber-bg: #fffaf0;
+  --green: #38a169;
+  --line: #e2e8f0;
+  --shadow: 0 4px 20px rgba(0,0,0,0.05);
+  --sidebar-width: 260px;
+  --footer-height: 45px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); color: var(--text); display: flex; min-height: 100vh; overflow-x: hidden; }
+
+/* Fixed Sidebar Navigation */
+.sidebar { 
+  width: var(--sidebar-width); 
+  background: var(--sidebar-bg); 
+  color: var(--sidebar-text); 
+  padding: 24px 0 24px 20px; 
+  display: flex; 
+  flex-direction: column; 
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 50;
+  overflow-y: auto;
+}
+
+.brand { font-size: 19px; font-weight: 700; padding-bottom: 24px; letter-spacing: -0.5px; display: flex; flex-direction: column; gap: 2px; }
+.brand-sub { font-size: 11px; font-weight: 400; opacity: 0.8; }
+.menu-label { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; opacity: 0.6; margin: 16px 0 8px 10px; }
+
+.menu { list-style: none; display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.menu li, .menu label.sidebar-btn { cursor: pointer; padding: 11px 18px; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 10px; border-radius: 30px 0 0 30px; color: rgba(255,255,255,0.9); transition: all 0.2s; }
+.menu li:hover, .menu label.sidebar-btn:hover { color: #fff; background: rgba(255,255,255,0.12); }
+.menu li.active { background: var(--sidebar-active); color: var(--primary); font-weight: 700; box-shadow: -4px 4px 10px rgba(0,0,0,0.05); }
+.menu li.danger-btn:hover { background: #c53030; color: #fff; }
+
+/* Main Wrapper Adjusted for Fixed Elements */
+.main-wrapper { 
+  flex: 1; 
+  margin-left: var(--sidebar-width); 
+  padding-bottom: var(--footer-height); 
+  display: flex; 
+  flex-direction: column; 
+  min-height: 100vh;
+}
+
+/* Top Header */
+header { background: transparent; padding: 20px 32px; display: flex; justify-content: space-between; align-items: center; }
+.page-title { font-size: 22px; font-weight: 700; color: #4a5568; }
+.user-profile { display: flex; align-items: center; gap: 12px; }
+.avatar { width: 38px; height: 38px; border-radius: 50%; background: #cbd5e0; display: grid; place-items: center; font-weight: 700; color: #4a5568; }
+
+.content { padding: 0 32px 32px; display: flex; flex-direction: column; gap: 20px; flex: 1; }
+
+/* KPI Cards Section */
+.kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
+.kpi-card { background: var(--card-bg); border-radius: 16px; padding: 20px; box-shadow: var(--shadow); position: relative; display: flex; flex-direction: column; justify-content: space-between; min-height: 110px; cursor: pointer; }
+.kpi-title { font-size: 13px; color: var(--muted); font-weight: 600; }
+.kpi-value { font-size: 30px; font-weight: 800; color: var(--text); margin-top: 6px; }
+.kpi-icon { position: absolute; top: 18px; right: 18px; width: 36px; height: 36px; border-radius: 50%; background: var(--bg); display: grid; place-items: center; font-size: 16px; }
+
+/* Filter & Table Styling */
+.card { background: var(--card-bg); border-radius: 16px; padding: 20px; box-shadow: var(--shadow); }
+.filters { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap: 10px; }
+input, select { width: 100%; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; background: #fff; outline: none; font-size: 13px; }
+input:focus, select:focus { border-color: var(--primary); }
+
+button.btn-ui { border: none; background: #edf2f7; padding: 10px 16px; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 13px; color: var(--text); }
+button.primary { background: var(--primary); color: #fff; }
+button.danger { color: var(--red); background: #fff; border: 1px solid var(--line); }
+
+.table-wrap { overflow-x: auto; margin-top: 14px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
+th { padding: 12px; background: #f8fafc; color: var(--muted); font-size: 11px; text-transform: uppercase; font-weight: 700; border-bottom: 1px solid var(--line); }
+td { padding: 14px 12px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+tr:hover td { background: #f8fafc; }
+
+.badge { padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; display: inline-block; }
+.badge.running { background: #e6fffa; color: var(--green); }
+.badge.soon { background: var(--amber-bg); color: var(--amber); }
+.badge.expired { background: var(--red-bg); color: var(--red); }
+
+/* Fixed Footer Styling */
+footer { 
+  position: fixed;
+  bottom: 0;
+  right: 0;
+  left: var(--sidebar-width);
+  height: var(--footer-height);
+  text-align: center; 
+  line-height: var(--footer-height);
+  font-size: 12px; 
+  font-weight: 600; 
+  color: var(--muted); 
+  border-top: 1px solid var(--line); 
+  background: #ffffff;
+  z-index: 40;
+  box-shadow: 0 -2px 10px rgba(0,0,0,0.03);
+}
+
+/* Modal Form */
+.modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 100; align-items: center; justify-content: center; }
+.modal.show { display: flex; }
+.modalbox { width: min(600px, 90%); background: #fff; border-radius: 20px; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
+.formgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 16px; }
+.field label { display: block; font-size: 11px; font-weight: 700; color: var(--muted); margin-bottom: 4px; text-transform: uppercase; }
+.field.full { grid-column: 1 / -1; }
+
+@media print {
+  .sidebar, header, .filters, th:last-child, td:last-child, footer { display: none !important; }
+  .main-wrapper { margin-left: 0; padding-bottom: 0; }
+  body { background: #fff; }
+  .content { padding: 0; }
+  .card { box-shadow: none; border: 1px solid #ccc; }
+}
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="brand">
+    <span id="displayCompName">M - SoftTech</span>
+    <span class="brand-sub" id="displayCompSub">Work Order Control System</span>
+  </div>
+
+  <ul class="menu">
+    <div class="menu-label">Navigation</div>
+    <li id="menuAll" class="active" onclick="switchTab('all')"><span>🏠</span> Home (All Register)</li>
+    <li id="menuExpired" onclick="switchTab('expired')"><span>⚠️</span> Expired Orders</li>
+
+    <div class="menu-label">Actions</div>
+    <label class="sidebar-btn">
+      <span>📂</span> Import Excel
+      <input id="fileInput" type="file" accept=".xlsx,.xls,.csv" hidden>
+    </label>
+    <li onclick="openAdd()"><span>➕</span> Add Site</li>
+    <li onclick="exportCSV()"><span>📥</span> Export Excel</li>
+    <li onclick="window.print()"><span>🖨️</span> Print / PDF</li>
+    <li class="danger-btn" onclick="clearAllData()"><span>🗑️</span> Clear Data</li>
+
+    <div class="menu-label">System</div>
+    <li onclick="openCompanySettings()"><span>⚙️</span> Company Settings</li>
+  </ul>
+</aside>
+
+<div class="main-wrapper">
+  <header>
+    <div class="page-title" id="pageTitle">Dashboard</div>
+    <div class="user-profile">
+      <div class="avatar" id="avatarInitials">MA</div>
+      <div>
+        <div style="font-size: 13px; font-weight: 700;" id="userTitle">Admin User</div>
+        <div style="font-size: 11px; color: var(--muted);" id="userComp">M - SoftTech</div>
+      </div>
+    </div>
+  </header>
+
+  <main class="content">
+    <section class="kpi-grid">
+      <div class="kpi-card" onclick="switchTab('all')">
+        <div class="kpi-title">Total Work Orders</div>
+        <div class="kpi-value" id="total">0</div>
+        <div class="kpi-icon">📊</div>
+      </div>
+      <div class="kpi-card" onclick="switchTab('all'); document.getElementById('status').value='Running'; render();">
+        <div class="kpi-title">Running</div>
+        <div class="kpi-value" id="running" style="color:var(--green)">0</div>
+        <div class="kpi-icon">✅</div>
+      </div>
+      <div class="kpi-card" onclick="switchTab('all'); document.getElementById('status').value='Expiring Soon'; render();">
+        <div class="kpi-title">Expiring ≤ 30 Days</div>
+        <div class="kpi-value" id="soon" style="color:var(--amber)">0</div>
+        <div class="kpi-icon">⏳</div>
+      </div>
+      <div class="kpi-card" onclick="switchTab('expired')">
+        <div class="kpi-title" style="color:var(--red)">Expired Work Orders</div>
+        <div class="kpi-value" id="expired" style="color:var(--red)">0</div>
+        <div class="kpi-icon">⚠️</div>
+      </div>
+    </section>
+
+    <section class="card filters">
+      <input id="search" placeholder="Search site, WO number...">
+      <select id="type"><option value="">All Site Types</option></select>
+      <select id="service"><option value="">All Services</option></select>
+      <select id="status"><option value="">All Status</option><option>Running</option><option>Expiring Soon</option><option>Expired</option></select>
+      <button class="btn-ui" onclick="resetFilters()">Reset</button>
+    </section>
+
+    <section class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px;">
+        <h3 id="tableHeading" style="font-size:16px;">Work Order Register</h3>
+        <span id="count" style="font-size:12px; color:var(--muted);"></span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>S.No</th><th>Site Type</th><th>Site Name</th><th>Ship To</th><th>Service Type</th><th>WO Number</th><th>Expire Date</th><th>Status</th><th>Overdue / Days Left</th><th>Actions</th></tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    Designed, Developed and Hosted By Bhim Mondal
+  </footer>
+</div>
+
+<!-- Site Form Modal -->
+<div class="modal" id="modal"><div class="modalbox">
+  <div style="display:flex;justify-content:space-between;align-items:center;">
+    <h2 id="modalTitle" style="font-size:18px">Add Site</h2>
+    <button class="btn-ui" onclick="closeModal()">✕</button>
+  </div>
+  <div class="formgrid">
+    <div class="field"><label>S.No</label><input id="fSno"></div>
+    <div class="field"><label>Site Type</label><input id="fType"></div>
+    <div class="field"><label>Site Name</label><input id="fSite"></div>
+    <div class="field"><label>Ship To</label><input id="fShip"></div>
+    <div class="field"><label>Service Type</label><input id="fService"></div>
+    <div class="field"><label>WO Number</label><input id="fWO"></div>
+    <div class="field full"><label>Expire Date</label><input id="fDate" type="date"></div>
+  </div>
+  <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:20px;">
+    <button class="btn-ui" onclick="closeModal()">Cancel</button>
+    <button class="btn-ui primary" onclick="saveSite()">Save</button>
+  </div>
+</div></div>
+
+<!-- Settings Modal -->
+<div class="modal" id="settingsModal"><div class="modalbox">
+  <div style="display:flex;justify-content:space-between;align-items:center;">
+    <h2 style="font-size:18px">Company Settings</h2>
+    <button class="btn-ui" onclick="closeSettingsModal()">✕</button>
+  </div>
+  <div class="formgrid">
+    <div class="field full"><label>Company / Brand Name</label><input id="cfgCompName" placeholder="e.g. M - SoftTech"></div>
+    <div class="field full"><label>Tagline / Subtitle</label><input id="cfgCompSub" placeholder="e.g. Work Order Control System"></div>
+  </div>
+  <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:20px;">
+    <button class="btn-ui" onclick="closeSettingsModal()">Cancel</button>
+    <button class="btn-ui primary" onclick="saveCompanySettings()">Save Changes</button>
+  </div>
+</div></div>
+
+<script>
+let rows=[], editIndex=null, filtered=[], activeTab='all';
+
+let compConfig = {
+  name: 'M - SoftTech',
+  sub: 'Work Order Control System'
+};
+
+function loadCompanySettings(){
+  let saved = localStorage.getItem('companyConfig');
+  if(saved){ try{ compConfig = JSON.parse(saved); }catch(e){} }
+  applyCompanySettings();
+}
+
+function applyCompanySettings(){
+  document.getElementById('displayCompName').textContent = compConfig.name || 'Company Name';
+  document.getElementById('displayCompSub').textContent = compConfig.sub || '';
+  document.getElementById('userComp').textContent = compConfig.name || 'Company';
+  
+  let initials = compConfig.name ? compConfig.name.split(' ').map(n=>n[0]).join('').substring(0,2).toUpperCase() : 'CO';
+  document.getElementById('avatarInitials').textContent = initials || 'MA';
+}
+
+function openCompanySettings(){
+  document.getElementById('cfgCompName').value = compConfig.name;
+  document.getElementById('cfgCompSub').value = compConfig.sub;
+  document.getElementById('settingsModal').classList.add('show');
+}
+
+function closeSettingsModal(){ document.getElementById('settingsModal').classList.remove('show'); }
+
+function saveCompanySettings(){
+  compConfig.name = document.getElementById('cfgCompName').value.trim() || 'My Company';
+  compConfig.sub = document.getElementById('cfgCompSub').value.trim() || '';
+  localStorage.setItem('companyConfig', JSON.stringify(compConfig));
+  applyCompanySettings();
+  closeSettingsModal();
+}
+
+function switchTab(tab){
+  activeTab=tab;
+  document.getElementById('menuAll').classList.toggle('active', tab==='all');
+  document.getElementById('menuExpired').classList.toggle('active', tab==='expired');
+  document.getElementById('pageTitle').textContent = tab==='expired' ? 'Expired Orders Dashboard' : 'Dashboard';
+  document.getElementById('tableHeading').textContent = tab==='expired' ? '⚠️ Expired Orders List' : 'Work Order Register';
+  let st = document.getElementById('status');
+  if(tab==='expired'){ st.value='Expired'; st.disabled=true; } else { st.disabled=false; }
+  render();
+}
+
+function dateOnly(v){
+  if(!v) return null;
+  if(v instanceof Date && !isNaN(v)) return new Date(v.getFullYear(),v.getMonth(),v.getDate());
+  if(typeof v==='number'){
+    const d=new Date(Math.round((v-25569)*86400000));
+    return isNaN(d)?null:new Date(d.getFullYear(),d.getMonth(),d.getDate());
+  }
+  let str=String(v).trim(), m=str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if(m) return new Date(+m[3],+m[2]-1,+m[1]);
+  m=str.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+  if(m) return new Date(+m[1],+m[2]-1,+m[3]);
+  let d=new Date(str); return isNaN(d)?null:new Date(d.getFullYear(),d.getMonth(),d.getDate());
+}
+function isoDate(v){let d=dateOnly(v);return d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:''}
+function daysLeft(v){let d=dateOnly(v);if(!d)return null;let t=new Date();t=new Date(t.getFullYear(),t.getMonth(),t.getDate());return Math.ceil((d-t)/86400000)}
+function statusOf(v){let n=daysLeft(v);if(n===null)return'No Date';if(n<0)return'Expired';if(n<=30)return'Expiring Soon';return'Running'}
+function fmtDate(v){let d=dateOnly(v);return d?d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}):'—'}
+
+const aliases={'Ship To':'Ship to','S.No':'Sno','Expire date':'Expire Date','WO No':'WO Number'};
+function normalizeRow(r,i){
+  let x={}; Object.keys(r||{}).forEach(k=>{let key=String(k).trim(); x[aliases[key]||key]=r[k]});
+  return { Sno:x.Sno||i+1, 'Site Type':x['Site Type']||'', 'Site Name':x['Site Name']||'', 'Ship to':x['Ship to']||'', 'Service Type':x['Service Type']||'', 'WO Number':x['WO Number']||'', 'Expire Date':isoDate(x['Expire Date']) };
+}
+
+function render(){
+  let q=document.getElementById('search').value.toLowerCase(), ty=document.getElementById('type').value, sv=document.getElementById('service').value, st=document.getElementById('status').value;
+  filtered=rows.filter(r=>{
+    let stStatus = statusOf(r['Expire Date']);
+    if(activeTab==='expired' && stStatus!=='Expired') return false;
+    return (!q||Object.values(r).join(' ').toLowerCase().includes(q))&&(!ty||r['Site Type']===ty)&&(!sv||r['Service Type']===sv)&&(!st||stStatus===st);
+  });
+  document.getElementById('count').textContent=`Showing ${filtered.length} of ${rows.length}`;
+  document.getElementById('tbody').innerHTML=filtered.map(r=>{
+    let dl=daysLeft(r['Expire Date']), s=statusOf(r['Expire Date']), c=s==='Expired'?'expired':s==='Expiring Soon'?'soon':'running';
+    return `<tr><td>${r.Sno}</td><td>${r['Site Type']}</td><td><b>${r['Site Name']||'—'}</b></td><td>${r['Ship to']||'—'}</td><td>${r['Service Type']||'—'}</td><td>${r['WO Number']||'—'}</td><td>${fmtDate(r['Expire Date'])}</td><td><span class="badge ${c}">${s}</span></td><td>${dl===null?'—':dl<0?'<b style="color:var(--red)">'+Math.abs(dl)+' days overdue</b>':dl+' days left'}</td><td><button class="btn-ui" onclick="openEdit(${rows.indexOf(r)})">Edit</button> <button class="btn-ui danger" onclick="deleteSite(${rows.indexOf(r)})">Delete</button></td></tr>`
+  }).join('');
+  updateKPIs();
+}
+
+function updateKPIs(){
+  let n=rows.map(r=>daysLeft(r['Expire Date']));
+  document.getElementById('total').textContent=rows.length;
+  document.getElementById('running').textContent=n.filter(x=>x!==null&&x>30).length;
+  document.getElementById('soon').textContent=n.filter(x=>x!==null&&x>=0&&x<=30).length;
+  document.getElementById('expired').textContent=n.filter(x=>x!==null&&x<0).length;
+}
+
+function openAdd(){editIndex=null;clearForm();document.getElementById('fSno').value=rows.length+1;document.getElementById('modal').classList.add('show')}
+function openEdit(i){editIndex=i;let r=rows[i];document.getElementById('fSno').value=r.Sno||'';document.getElementById('fType').value=r['Site Type']||'';document.getElementById('fSite').value=r['Site Name']||'';document.getElementById('fShip').value=r['Ship to']||'';document.getElementById('fService').value=r['Service Type']||'';document.getElementById('fWO').value=r['WO Number']||'';document.getElementById('fDate').value=isoDate(r['Expire Date']);document.getElementById('modal').classList.add('show')}
+function clearForm(){['fSno','fType','fSite','fService','fWO','fDate'].forEach(id=>document.getElementById(id).value='')}
+function closeModal(){document.getElementById('modal').classList.remove('show')}
+function saveSite(){let r={Sno:document.getElementById('fSno').value||rows.length+1,'Site Type':document.getElementById('fType').value.trim(),'Site Name':document.getElementById('fSite').value.trim(),'Ship to':document.getElementById('fShip').value.trim(),'Service Type':document.getElementById('fService').value.trim(),'WO Number':document.getElementById('fWO').value.trim(),'Expire Date':isoDate(document.getElementById('fDate').value)};if(editIndex===null)rows.push(r);else rows[editIndex]=r;persist();render();closeModal()}
+function deleteSite(i){if(confirm('Delete order?')){rows.splice(i,1);persist();render()}}
+function persist(){localStorage.setItem('workOrderData',JSON.stringify(rows))}
+function clearAllData(){if(confirm('Clear all data?')){localStorage.removeItem('workOrderData');rows=[];render()}}
+function resetFilters(){['search','type','service'].forEach(x=>document.getElementById(x).value='');if(activeTab!=='expired')document.getElementById('status').value='';render()}
+
+function exportCSV(){
+  let ws=XLSX.utils.json_to_sheet(filtered), wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Data'); XLSX.writeFile(wb,'WorkOrders.xlsx');
+}
+
+document.querySelectorAll('input,select').forEach(e=>e.addEventListener('input',render));
+document.getElementById('fileInput').addEventListener('change',e=>{
+  let f=e.target.files[0]; if(!f)return;
+  let r=new FileReader();
+  r.onload=x=>{
+    let wb=XLSX.read(x.target.result,{type:'array',cellDates:true});
+    rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:'',raw:true}).map(normalizeRow);
+    persist();render();
+  };
+  r.readAsArrayBuffer(f);
+});
+
+(function(){
+  loadCompanySettings();
+  let saved=localStorage.getItem('workOrderData');
+  if(saved){try{rows=JSON.parse(saved).map(normalizeRow)}catch(e){}}
+  render();
+})();
+</script>
+</body>
+</html>
